@@ -1,16 +1,23 @@
+(defpackage #:schema-protocol-avro.generated
+  (:use))
+
 (eval-when (:compile-toplevel :load-toplevel :execute)
-  (let* ((pkg (find-package '#:schema-protocol))
-         (sym (intern "AVRO-SCHEMA" pkg)))
-    (export sym pkg)))
+  (let ((pkg (find-package '#:schema-protocol)))
+    (dolist (name '("AVRO-SCHEMA" "SCHEMA-FORMAT-BACKEND" "REGISTER-SCHEMA-FORMAT"
+                    "BACKEND-EMIT-SCHEMA" "BACKEND-PARSE-SCHEMA"))
+      (export (intern name pkg) pkg))))
 
 (defpackage #:schema-protocol-avro
   (:use #:cl)
   (:nicknames #:stack-schema-avro)
   (:import-from #:closer-mop
+                #:ensure-class
                 #:slot-definition-type)
   (:import-from #:schema-protocol
                 #:schema-of
                 #:schema-slots
+                #:schema-class
+                #:schema-object
                 #:find-schema
                 #:schema-tag
                 #:schema-variants
@@ -28,10 +35,15 @@
                 #:slot-minimum
                 #:slot-maximum
                 #:avro-schema
+                #:schema-format-backend
+                #:register-schema-format
+                #:backend-emit-schema
+                #:backend-parse-schema
                 #:schema-error)
   (:export #:avro-schema-error
            #:avro-schema-error-message
            #:emit
+           #:compile-schema
            #:avro-schema))
 
 (in-package #:schema-protocol-avro)

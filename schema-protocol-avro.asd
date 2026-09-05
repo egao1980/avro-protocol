@@ -1,6 +1,6 @@
 (defsystem "schema-protocol-avro"
-  :version "0.1.0"
-  :description "Avro schema emit for schema-protocol (defschema → Avro JSON schema)"
+  :version "0.1.1"
+  :description "Avro schema emit/parse for schema-protocol (defschema ↔ Avro JSON schema)"
   :author "egao1980"
   :license "MIT"
   :depends-on ("schema-protocol" "avro-protocol" "closer-mop")
@@ -11,6 +11,7 @@
   :pathname "src/schema-protocol"
   :components ((:file "package")
                (:file "emit")
+               (:file "compile")
                (:file "protocol"))
   :in-order-to ((test-op (test-op "schema-protocol-avro/tests"))))
 
