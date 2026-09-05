@@ -115,7 +115,29 @@
          (t t))))
     (t t)))
 
-(defun %fill-record (ctx name node)
+(defun %field-names (node)
+  (mapcar (lambda (f) (and (hash-table-p f) (%ht-get f "name")))
+          (%as-list (%ht-get node "fields"))))
+
+(defun %infer-union-tag (records)
+  "Shared field used as :tag. Prefer kind/type/tag, else the first common name."
+  (let ((common (reduce (lambda (a b) (intersection a b :test #'equal))
+                        (mapcar #'%field-names records))))
+    (or (find-if (lambda (n)
+                  (and (stringp n)
+                       (member n '("kind" "type" "tag") :test #'string-equal)))
+                common)
+        (find-if #'stringp common))))
+
+(defun %eql-from-default (default)
+  (cond
+    ((null default) nil)
+    ((keywordp default) default)
+    ((symbolp default) (intern (symbol-name default) :keyword))
+    ((stringp default) (intern (string-upcase default) :keyword))
+    (t default)))
+
+(defun %fill-record (ctx name node &key supers tag-field)
   (let ((sym (%name-symbol name ctx)))
     (when (gethash sym (compile-ctx-filled ctx))
       (return-from %fill-record (find-class sym)))
@@ -126,10 +148,15 @@
           (error 'avro-schema-error :message "record field must be an object"))
         (let* ((fname (%ht-get field "name"))
                (fsym (%name-symbol fname ctx))
-               (ftype (type-from-avro (%ht-get field "type") ctx :name-hint fname))
+               (default (%ht-get field "default"))
+               (eql-tag (and tag-field (stringp fname)
+                             (string-equal fname tag-field)
+                             (%eql-from-default default)))
+               (ftype (if eql-tag
+                          `(eql ,eql-tag)
+                          (type-from-avro (%ht-get field "type") ctx :name-hint fname)))
                (optional (and (consp ftype) (eq (first ftype) 'or)
                               (member :null (rest ftype))))
-               (default (%ht-get field "default"))
                (slot `(:name ,fsym
                        :type ,ftype
                        :initargs (,(intern (symbol-name fsym) :keyword))
@@ -144,11 +171,38 @@
           (push slot slots)))
       (ensure-class sym
                     :metaclass (find-class 'schema-class)
-                    :direct-superclasses (list (find-class 'schema-object))
+                    :direct-superclasses (or supers (list (find-class 'schema-object)))
                     :direct-slots (nreverse slots)))))
 
+(defun %fill-union (ctx name records)
+  (let* ((tag (%infer-union-tag records))
+         (wrap (%name-symbol name ctx))
+         (tag-sym (and tag (%name-symbol tag ctx))))
+    (ensure-class wrap
+                  :metaclass (find-class 'schema-class)
+                  :direct-superclasses (list (find-class 'schema-object))
+                  :direct-slots (if tag
+                                    (list `(:name ,tag-sym
+                                            :type keyword
+                                            :initargs (,(intern (symbol-name tag-sym) :keyword))
+                                            :readers (,tag-sym)
+                                            :writers ((setf ,tag-sym))
+                                            :key ,tag
+                                            :required t))
+                                    nil)
+                  :tag tag-sym)
+    (setf (gethash wrap (compile-ctx-filled ctx)) t)
+    (dolist (r records)
+      (%fill-record ctx
+                    (or (%ht-get r "name") (gentemp "VARIANT" (compile-ctx-package ctx)))
+                    r
+                    :supers (list (find-class wrap))
+                    :tag-field tag))
+    (find-class wrap)))
+
 (defun compile-schema (source &key name (package *generated-package*) &allow-other-keys)
-  "Avro JSON schema (string / hash-table / compiled avro-schema) → schema-class."
+  "Avro JSON schema (string / hash-table / compiled avro-schema) → schema-class.
+   A union of records becomes a tagged wrapper (:tag inferred from a shared field)."
   (let* ((tree (%tree-from-source source))
          (ctx (make-compile-ctx :package package)))
     (cond
@@ -156,13 +210,10 @@
        (let ((records (remove-if-not #'hash-table-p (%as-list tree))))
          (unless records
            (error 'avro-schema-error :message "union has no record branch"))
-         (dolist (r records)
-           (%fill-record ctx (or (%ht-get r "name")
-                                 (gentemp "VARIANT" package))
-                         r))
-         (find-class (%name-symbol (or name (%ht-get (first records) "name")
-                                       (gentemp "SCHEMA" package))
-                                   ctx))))
+         (%fill-union ctx
+                      (or name (%ht-get (first records) "name")
+                          (gentemp "SCHEMA" package))
+                      records)))
       ((hash-table-p tree)
        (let ((root (or name (%ht-get tree "name") (gentemp "SCHEMA" package))))
          (unless (or (equal (%type-name tree) "record") (%ht-get tree "fields"))
