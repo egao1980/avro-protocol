@@ -4,9 +4,7 @@
   :author "egao1980"
   :license "MIT"
   :depends-on ("babel" "serdes-protocol")
-  :properties (:cl-repo (:ci (:with ("schema-protocol-avro")
-                             :sources (("serdes-protocol" :oci)
-                                       ("schema-protocol" :oci)))))
+  :properties (:cl-repo (:ci (:with ("schema-protocol-avro"))))
   :serial t
   :pathname "src"
   :components ((:file "package")
