@@ -1,0 +1,32 @@
+name: Publish checkout
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "OCI tag (empty → each .asd :version)"
+        required: false
+        default: ""
+        type: string
+      packager_version:
+        description: "Packager image version"
+        required: false
+        default: "latest"
+        type: string
+
+jobs:
+  publish:
+    strategy:
+      fail-fast: false
+      matrix:
+        system:
+          - avro-protocol
+          - schema-protocol-avro
+    uses: egao1980/cl-repository/.github/workflows/publish-source.yml@main
+    with:
+      system: ${{ matrix.system }}
+      version: ${{ inputs.version }}
+      packager-version: ${{ inputs.packager_version }}
+    permissions:
+      contents: read
+      packages: write
