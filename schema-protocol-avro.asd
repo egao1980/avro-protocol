@@ -1,5 +1,5 @@
 (defsystem "schema-protocol-avro"
-  :version "0.1.1"
+  :version "0.1.2"
   :description "Avro schema emit/parse for schema-protocol (defschema ↔ Avro JSON schema)"
   :author "egao1980"
   :license "MIT"
